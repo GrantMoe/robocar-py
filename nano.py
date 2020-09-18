@@ -20,18 +20,22 @@ class GarntCar:
     def drive(self):
         self.nav['steering'] = self.ctrl.get_steering()
         self.nav['throttle'] = self.ctrl.get_throttle()
-        print(self.nav)
+        return self.nav
+
 
 
 def main():
+
     car = GarntCar()
     do_drive = True
     while do_drive:
         try:
             car.drive()
+            print(car.nav)
             time.sleep(0.1)
         except KeyboardInterrupt:
             do_drive = False
+
 
 
 if __name__ == "__main__":
