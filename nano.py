@@ -7,7 +7,6 @@ from threading import Thread
 import serial
 from xbox import XBoxController
 
-
 CONTROLLER_PATH = '/dev/input/event2'
 
 class GarntCar:
@@ -32,9 +31,9 @@ class GarntCar:
         """ Close/release controller """
         self.ctrl.stop()
 
+
 def main():
     """ Main function """
-
     serial_port = serial.Serial(
         port="/dev/ttyTHS1",
         baudrate=115200,
@@ -42,20 +41,13 @@ def main():
         parity=serial.PARITY_NONE,
         stopbits=serial.STOPBITS_ONE,
     )
-
     time.sleep(1)
-    # serial_port.flush()
-
+    serial_port.flush()
     car = GarntCar()
     serial_port.write(b"n,127,127")
-
-
-
     while not car.ready():
         sleep(0.25)
-
     serial_port.write(b's')
-
     do_drive = True
     while do_drive:
         try:
@@ -71,11 +63,11 @@ def main():
             print("Error occurred. Exiting Program")
             print("Error: " + str(exception_error))
             traceback.print_exc(file=sys.stdout)
-
     car.stop()
     serial_port.write('x'.encode())
     serial_port.flush()
     serial_port.close()
+
 
 if __name__ == "__main__":
     main()
