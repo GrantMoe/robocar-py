@@ -5,6 +5,7 @@ import builtins
 import logging
 import asyncio
 from enum import Enum
+from asyncio.tasks import ensure_future
 from bleak import BleakClient
 from bleak import BleakScanner
 
@@ -79,15 +80,12 @@ async def update_controller(client):
     global menu
     await client.write_gatt_char(UART_RX_CHAR_UUID, menu)
 
-
-
 def byte_to_pwm(in_byte):
     pwm = ( (in_byte - 0) / (256 - 0) ) * (2000 - 1000) + 1000
     return pwm
 
 def is_pressed(btn):
     return BTNS & 1 << btn.value
-
 
 def get_menu(menu_type):
     global menu
@@ -112,7 +110,6 @@ def get_menu(menu_type):
     data.join(mb)
     menu = data
 
-
 def manual_drive():
     return byte_to_pwm(STR), byte_to_pwm(THR)
 
@@ -132,8 +129,7 @@ def erase_records(cutoff):
 def record_data():
     pass
 
-async def process_inputs():
-
+async def control_worker():
     global menu, control_mode, drive_mode
     global auto_throttle
     global is_erasing, seconds_to_erase
@@ -219,7 +215,7 @@ async def send_output():
   await asyncio.sleep(0.1)
 
     
-async def run():
+async def connection_worker():
     global STR, THR, TOG, BTNS
 
     device = await BleakScanner.find_device_by_address(addr)
@@ -239,32 +235,23 @@ async def run():
             BTNS = data_list[3][0]
         for d in data_list:
             print(d)
-  
+
     print('Connecting')
     
-
-    
     async with BleakClient(device, disconnected_callback=handle_disconnect) as client:
-   
+        await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
         print(f'Connected to {device.name}')
 
-        #await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
-        
-        while True:
-            await process_inputs()
-            #await update_controller(client)
-            await send_output()
-
-#loop = asyncio.get_event_loop()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(run())
-        #loop.run_until_complete(run())
-    except asyncio.CancelledError:
-        pass
 
+    loop = asyncio.get_event_loop()
+    try:
+        asyncio.ensure_future(connection_worker())
+        asyncio.ensure_future(control_worker())
+        loop.run_forever()
     except KeyboardInterrupt:
-        print('\nReceived Keyboard Interrupt')
+        pass
     finally:
-        print('Program finished')
+        print("Closing Loop")
+        loop.close()
