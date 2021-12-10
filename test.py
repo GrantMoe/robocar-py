@@ -47,10 +47,12 @@ AUTO_MAX = 85
 
 menu = []
 
+
 is_driving = False
 is_recording = False
 is_erasing = False
-new_data = False
+
+
 seconds_to_erase = 0
 
 # Default Adafruit BleUUART for now
@@ -85,42 +87,31 @@ def byte_to_pwm(in_byte):
     pwm = ( (in_byte - 0) / (256 - 0) ) * (2000 - 1000) + 1000
     return pwm
 
-def is_pressed(btn):
-    return BTNS & 1 << btn.value
+def is_pressed(buttons, btn):
+    return buttons & 1 << btn.value
+
 
 def get_menu(menu_type):
-    global menu
-
-    m = bytearray()
+    menu_fields = ''
     if menu_type == Menu_Mode.AUTO: 
-        m.extend(bytes('a', 'utf-8'))
-        m.extend(bytes(is_driving))
-        m.extend(bytes(auto_throttle))
+        menu_fields = f'a,{int(is_driving)},{int(auto_throttle)}'
     elif menu_type == Menu_Mode.DATA:
-        m.extend(bytes('d', 'utf-8'))
-        m.extend(bytes(is_recording))
-        m.extend(bytes(records))
+        menu_fields = f'd,{int(is_recording)},{records}'
     elif menu_type == Menu_Mode.ERASE:
-        m.extend(bytes('e', 'utf-8'))
-        m.extend(bytes(seconds_to_erase))
+        menu_fields = f'e,{seconds_to_erase}'
     else:
-        m.extend(bytes('m', 'utf-8'))
-    mb = bytearray(m)
-    length = len(mb)
-    data = bytearray(bytes('m', 'utf-8'))
-    data.extend(bytes(length))
-    data.extend(mb)
-    menu = data
+        menu_fields = 'm'
+    return bytearray(menu_fields)
+    
+def manual_drive(str, thr):
+    return byte_to_pwm(str), byte_to_pwm(thr)
 
-def manual_drive():
-    return byte_to_pwm(STR), byte_to_pwm(THR)
-
-def auto_drive(throttle):
-    if throttle == Auto_Throttle.AUTO:
-        # add prediction here
+def auto_drive(thr, throttle_mode):
+    if throttle_mode == Auto_Throttle.AUTO:
+        # TODO
         return STEERING_NEUTRAL, THROTTLE_NEUTRAL
-    if throttle == Auto_Throttle.MANUAL:
-        return STEERING_NEUTRAL, byte_to_pwm(THR)
+    if throttle_mode == Auto_Throttle.MANUAL:
+        return STEERING_NEUTRAL, byte_to_pwm(thr)
 
 def erase_records(cutoff):
     # open CSV, open TEMP
@@ -131,88 +122,10 @@ def erase_records(cutoff):
 def record_data():
     pass
 
-async def control_worker():
-    global menu, control_mode, drive_mode
-    global auto_throttle
-    global is_erasing, seconds_to_erase
-    global is_recording, records
-    global steering_pwm, throttle_pwm
-    global new_data
-
-    if new_data == False:
-        return
-    new_data = False
-    print('handling control')
-
-    # drive mode
-    if TOG > TRAIN_MIN:
-        drive_mode = Drive_Mode.DATA
-    elif TOG < AUTO_MAX:
-        drive_mode = Drive_Mode.AUTO
-    else:
-        drive_mode = Drive_Mode.MANUAL
-
-    # if the master start/stop switch is on
-    if is_pressed(Button.CH_4):
-        if drive_mode == Drive_Mode.AUTO:
-            menu = get_menu(Menu_Mode.AUTO)
-            # toggle auto throttle
-            if is_pressed(Button.TFT_A):
-                if auto_throttle == Auto_Throttle.MANUAL:
-                    auto_throttle = Auto_Throttle.AUTO
-                else:
-                    auto_throttle = Auto_Throttle.MANUAL
-            # get output based on throttle
-            if is_driving:
-                steering_pwm, throttle_pwm = auto_drive(auto_throttle)
-            else:
-                steering_pwm, throttle_pwm = manual_drive()
-        elif drive_mode == Drive_Mode.DATA:
-            if is_erasing:
-                menu = get_menu(Menu_Mode.ERASE)
-                # confirm erasure
-                if is_pressed(Button.TFT_B):
-                    erase_records(seconds_to_erase)
-                    is_erasing = False
-                # cancel erasure
-                elif is_pressed(Button.TFT_A):
-                    seconds_to_erase = 0
-                    is_erasing = False
-                # add seconds
-                elif is_pressed(Button.JOY_UP):
-                    seconds_to_erase += 5
-                # remove seconds
-                elif is_pressed(Button.JOY_DOWN):
-                    seconds_to_erase -= 5
-                    seconds_to_erase = min(seconds_to_erase, 0)
-            else:
-                menu = get_menu(Menu_Mode.DATA)
-                record_data()
-                # toggle recording
-                if is_pressed(Button.TFT_B):
-                    if is_recording:
-                        is_recording = False
-                    else: 
-                        is_recording = True
-                # start erasing
-                elif is_pressed(Button.TFT_A):
-                    is_recording = False
-                    is_erasing = True
-            steering_pwm, throttle_pwm = manual_drive()
-        else:
-            menu = get_menu(Menu_Mode.MANUAL)
-            # just manual driving
-            steering_pwm, throttle_pwm = manual_drive()
-    else:
-        # STOP
-        steering_pwm = STEERING_NEUTRAL
-        throttle_pwm = THROTTLE_NEUTRAL
-    await asyncio.sleep(0.1)
 
 # Test
 async def send_output():
   global STR, THR, TOG, BTNS
-
   os.system('clear')
   print('===================')
   print(STR, THR, TOG, BTNS)
@@ -222,54 +135,105 @@ async def send_output():
   print('===================')
   await asyncio.sleep(0.1)
 
-    
-async def run_ble():
-    global menu
-    print('start ble')
 
-    device = await BleakScanner.find_device_by_address(addr)
-
-    def handle_disconnect(_: BleakClient):
-        print('Device disconnected')
-        for task in asyncio.all_tasks():
-            task.cancel()
-
-    def handle_rx(_: int, data: bytearray):
-        print('handle_rx')
-        global STR, THR, TOG, BTNS, new_data
+async def run_control_task(queue: asyncio.Queue):
+    while True:
+        data = await queue.get()
         data_list = data.split(b',')
         if len(data_list) >= 3:
             STR = data_list[0][0]
             THR = data_list[1][0]
             TOG = data_list[2][0]
             BTNS = data_list[3][0]
-        new_data = True
 
-    async with BleakClient(device, disconnected_callback=handle_disconnect) as client:
-        await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
+        # drive mode
+        if TOG > TRAIN_MIN:
+            drive_mode = Drive_Mode.DATA
+        elif TOG < AUTO_MAX:
+            drive_mode = Drive_Mode.AUTO
+        else:
+            drive_mode = Drive_Mode.MANUAL
 
-    loop = get_running_loop()
+        # if the master start/stop switch is on
+        if is_pressed(BTNS, Button.CH_4):
+            if drive_mode == Drive_Mode.AUTO:
+                menu = get_menu(Menu_Mode.AUTO)
+                # toggle auto throttle
+                if is_pressed(BTNS, Button.TFT_A):
+                    if auto_throttle == Auto_Throttle.MANUAL:
+                        auto_throttle = Auto_Throttle.AUTO
+                    else:
+                        auto_throttle = Auto_Throttle.MANUAL
+                # get output based on throttle
+                if is_driving:
+                    steering_pwm, throttle_pwm = auto_drive(auto_throttle)
+                else:
+                    steering_pwm, throttle_pwm = manual_drive(STR, THR)
+            elif drive_mode == Drive_Mode.DATA:
+                if is_erasing:
+                    menu = get_menu(Menu_Mode.ERASE)
+                    # confirm erasure
+                    if is_pressed(BTNS, Button.TFT_B):
+                        erase_records(seconds_to_erase)
+                        is_erasing = False
+                    # cancel erasure
+                    elif is_pressed(BTNS, Button.TFT_A):
+                        seconds_to_erase = 0
+                        is_erasing = False
+                    # add seconds
+                    elif is_pressed(BTNS, Button.JOY_UP):
+                        seconds_to_erase += 5
+                    # remove seconds
+                    elif is_pressed(BTNS, Button.JOY_DOWN):
+                        seconds_to_erase -= 5
+                        seconds_to_erase = min(seconds_to_erase, 0)
+                else:
+                    menu = get_menu(Menu_Mode.DATA)
+                    record_data()
+                    # toggle recording
+                    if is_pressed(BTNS, Button.TFT_B):
+                        if is_recording:
+                            is_recording = False
+                        else: 
+                            is_recording = True
+                    # start erasing
+                    elif is_pressed(BTNS, Button.TFT_A):
+                        is_recording = False
+                        is_erasing = True
+                steering_pwm, throttle_pwm = manual_drive(STR, THR)
+            else:
+                menu = get_menu(Menu_Mode.MANUAL)
+                # just manual driving
+                steering_pwm, throttle_pwm = manual_drive(STR, THR)
+        else:
+            # STOP
+            steering_pwm = STEERING_NEUTRAL
+            throttle_pwm = THROTTLE_NEUTRAL
+        os.system('clear')
+        print('===================')
+        print(steering_pwm, throttle_pwm, TOG, BTNS)
+        for button in Button:
+            if BTNS & 1 << button.value:
+                print(button.name)
+        print('===================')
+        
 
-    while True:
-        await asyncio.sleep(0.3)
-        await client.write_gatt_char(UART_RX_CHAR_UUID, menu)
+async def run_ble_client(queue: asyncio.Queue):
+    async def callback_handler(data):
+        await queue.put(data)
+    async with BleakClient(addr) as client:
+        await client.start_notify(UART_TX_CHAR_UUID, callback_handler)
+        await asyncio.sleep(9999999) # shrug
 
-async def run_control_loop():
-    while True:
-        await control_worker()
-        await asyncio.sleep(0.2)
 
 async def main():
-    print('main')
-    #await run_ble()
-    #await run_control_loop()
-    #await run_ble()
-    await asyncio.gather(run_ble(), run_control_loop())
+    queue = asyncio.Queue()
+    ble_task = run_ble_client(queue)
+    control_task =  run_control_task(queue)
+    await asyncio.gather(ble_task, control_task)
+
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except asyncio.CancelledError:
-        pass
+    asyncio.run(main())
 
 
