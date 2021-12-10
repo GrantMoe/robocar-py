@@ -101,7 +101,7 @@ def get_menu(menu_type):
         menu_fields = f'e,{seconds_to_erase}'
     else:
         menu_fields = 'm'
-    return bytearray(menu_fields)
+    return bytearray(menu_fields, 'utf-8')
     
 def manual_drive(str, thr):
     return byte_to_pwm(str), byte_to_pwm(thr)
@@ -219,7 +219,7 @@ async def run_control_task(queue: asyncio.Queue):
         
 
 async def run_ble_client(queue: asyncio.Queue):
-    async def callback_handler(data):
+    async def callback_handler(sender, data):
         await queue.put(data)
     async with BleakClient(addr) as client:
         await client.start_notify(UART_TX_CHAR_UUID, callback_handler)
