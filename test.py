@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import os
 import builtins
 import logging
 import asyncio
@@ -76,7 +76,7 @@ menu = {
 }
 
 
-def handle_disconnect():
+def handle_disconnect(self):
     print('Device disconnected')
     for task in asyncio.all_tasks():
         task.cancel()
@@ -84,11 +84,11 @@ def handle_disconnect():
 def handle_rx(_: int, data: bytearray):
     global STR, THR, TOG, BTNS
     data_list = data.split(b',')
-    STR = data_list[0][0]
-    THR = data_list[1][0]
-    TOG = data_list[2][0]
-    BTNS = data_list[3][0]
-
+    if len(data_list) >= 3:
+        STR = data_list[0][0]
+        THR = data_list[1][0]
+        TOG = data_list[2][0]
+        BTNS = data_list[3][0]
 
 def byte_to_pwm(in_byte):
     pwm = ( (in_byte - 0) / (256 - 0) ) * (2000 - 1000) + 1000
@@ -149,7 +149,7 @@ def erasing_menu(seconds):
     m['a'] = 'cancel'
     return m
 
-def process_inputs():
+async def process_inputs():
     global menu, control_mode, drive_mode
     global auto_throttle
     global is_erasing, seconds_to_erase
@@ -212,11 +212,13 @@ def process_inputs():
 async def send_output():
   global STR, THR, TOG, BTNS
   await asyncio.sleep(0.1)
+  os.system('clear')
+  print('===================')
   print(STR, THR, TOG, BTNS)
   for button in Button:
       if BTNS & 1 << button.value:
           print(button.name)
-  print('----')
+  print('===================')
 
     
 async def run():
@@ -232,8 +234,7 @@ async def run():
         await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
         
         while True:
-            process_inputs()
-            # await loop.run_in_executor(None, )
+            await process_inputs()
             await send_output()
 
 loop = asyncio.get_event_loop()
