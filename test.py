@@ -44,6 +44,8 @@ class Menu_Mode(Enum):
 TRAIN_MIN = 170
 AUTO_MAX = 85
 
+menu = []
+
 is_driving = False
 is_recording = False
 is_erasing = False
@@ -74,21 +76,10 @@ throttle_pwm = THROTTLE_NEUTRAL
 
 
 async def update_controller(client):
-    await client.write_gatt_char(UART_RX_CHAR_UUID, data)
+    global menu
+    await client.write_gatt_char(UART_RX_CHAR_UUID, menu)
 
-def handle_disconnect(self):
-    print('Device disconnected')
-    for task in asyncio.all_tasks():
-        task.cancel()
 
-def handle_rx(_: int, data: bytearray):
-    global STR, THR, TOG, BTNS
-    data_list = data.split(b',')
-    if len(data_list) >= 3:
-        STR = data_list[0][0]
-        THR = data_list[1][0]
-        TOG = data_list[2][0]
-        BTNS = data_list[3][0]
 
 def byte_to_pwm(in_byte):
     pwm = ( (in_byte - 0) / (256 - 0) ) * (2000 - 1000) + 1000
@@ -101,7 +92,7 @@ def is_pressed(btn):
 def get_menu(menu_type):
     global menu
     data = ['m']
-    m = []
+    m = bytearray()
     if menu_type == Menu_Mode.AUTO: 
         m.append('a')
         m.append(is_driving)
@@ -142,6 +133,7 @@ def record_data():
     pass
 
 async def process_inputs():
+
     global menu, control_mode, drive_mode
     global auto_throttle
     global is_erasing, seconds_to_erase
@@ -211,11 +203,12 @@ async def process_inputs():
         # STOP
         steering_pwm = STEERING_NEUTRAL
         throttle_pwm = THROTTLE_NEUTRAL
+    await asyncio.sleep(0.5)
 
 # Test
 async def send_output():
   global STR, THR, TOG, BTNS
-  await asyncio.sleep(0.1)
+
   os.system('clear')
   print('===================')
   print(STR, THR, TOG, BTNS)
@@ -223,30 +216,55 @@ async def send_output():
       if BTNS & 1 << button.value:
           print(button.name)
   print('===================')
+  await asyncio.sleep(0.1)
 
     
 async def run():
+    global STR, THR, TOG, BTNS
+
+    device = await BleakScanner.find_device_by_address(addr)
+
+    def handle_disconnect(_: BleakClient):
+        print('Device disconnected')
+        for task in asyncio.all_tasks():
+            task.cancel()
+
+    def handle_rx(_: int, data: bytearray):
+        global STR, THR, TOG, BTNS
+        data_list = data.split(b',')
+        if len(data_list) >= 3:
+            STR = data_list[0][0]
+            THR = data_list[1][0]
+            TOG = data_list[2][0]
+            BTNS = data_list[3][0]
+        for d in data_list:
+            print(d)
   
     print('Connecting')
     
-    device = await BleakScanner.find_device_by_address(addr)
+
     
     async with BleakClient(device, disconnected_callback=handle_disconnect) as client:
    
         print(f'Connected to {device.name}')
 
-        await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
+        #await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
         
         while True:
             await process_inputs()
-            await update_controller(client)
+            #await update_controller(client)
             await send_output()
 
-loop = asyncio.get_event_loop()
+#loop = asyncio.get_event_loop()
 
-try:
-    loop.run_until_complete(run())
-except KeyboardInterrupt:
-    print('\nReceived Keyboard Interrupt')
-finally:
-    print('Program finished')
+if __name__ == "__main__":
+    try:
+        asyncio.run(run())
+        #loop.run_until_complete(run())
+    except asyncio.CancelledError:
+        pass
+
+    except KeyboardInterrupt:
+        print('\nReceived Keyboard Interrupt')
+    finally:
+        print('Program finished')
