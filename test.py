@@ -50,6 +50,7 @@ menu = []
 is_driving = False
 is_recording = False
 is_erasing = False
+new_data = False
 seconds_to_erase = 0
 
 # Default Adafruit BleUUART for now
@@ -89,25 +90,26 @@ def is_pressed(btn):
 
 def get_menu(menu_type):
     global menu
-    data = ['m']
+
     m = bytearray()
     if menu_type == Menu_Mode.AUTO: 
-        m.append('a')
-        m.append(is_driving)
-        m.append(auto_throttle)
+        m.extend(bytes('a', 'utf-8'))
+        m.extend(bytes(is_driving))
+        m.extend(bytes(auto_throttle))
     elif menu_type == Menu_Mode.DATA:
-        m.append('d')
-        m.append(is_recording)
-        m.append(records)
+        m.extend(bytes('d', 'utf-8'))
+        m.extend(bytes(is_recording))
+        m.extend(bytes(records))
     elif menu_type == Menu_Mode.ERASE:
-        m.append('e')
-        m.append(seconds_to_erase)
+        m.extend(bytes('e', 'utf-8'))
+        m.extend(bytes(seconds_to_erase))
     else:
-        m.append('m')
+        m.extend(bytes('m', 'utf-8'))
     mb = bytearray(m)
     length = len(mb)
-    data.append(length)
-    data.join(mb)
+    data = bytearray(bytes('m', 'utf-8'))
+    data.extend(bytes(length))
+    data.extend(mb)
     menu = data
 
 def manual_drive():
@@ -135,6 +137,12 @@ async def control_worker():
     global is_erasing, seconds_to_erase
     global is_recording, records
     global steering_pwm, throttle_pwm
+    global new_data
+
+    if new_data == False:
+        return
+    new_data = False
+    print('handling control')
 
     # drive mode
     if TOG > TRAIN_MIN:
@@ -216,6 +224,8 @@ async def send_output():
 
     
 async def run_ble():
+    global menu
+    print('start ble')
 
     device = await BleakScanner.find_device_by_address(addr)
 
@@ -225,28 +235,41 @@ async def run_ble():
             task.cancel()
 
     def handle_rx(_: int, data: bytearray):
-        global STR, THR, TOG, BTNS
+        print('handle_rx')
+        global STR, THR, TOG, BTNS, new_data
         data_list = data.split(b',')
         if len(data_list) >= 3:
             STR = data_list[0][0]
             THR = data_list[1][0]
             TOG = data_list[2][0]
             BTNS = data_list[3][0]
-    
+        new_data = True
+
     async with BleakClient(device, disconnected_callback=handle_disconnect) as client:
-        while True:
-            await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
-            await asyncio.sleep(0.1)
+        await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
+
+    loop = get_running_loop()
+
+    while True:
+        await asyncio.sleep(0.3)
+        await client.write_gatt_char(UART_RX_CHAR_UUID, menu)
 
 async def run_control_loop():
     while True:
         await control_worker()
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
 async def main():
-    asyncio.gather(run_ble, run_control_loop)
+    print('main')
+    #await run_ble()
+    #await run_control_loop()
+    #await run_ble()
+    await asyncio.gather(run_ble(), run_control_loop())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except asyncio.CancelledError:
+        pass
 
 
