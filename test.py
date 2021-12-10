@@ -256,6 +256,6 @@ if __name__ == "__main__":
     serial_port.flush()
     serial_port.write(b"n,127,127")
     serial_port.write(b's')
-    asyncio.run(main())
+    asyncio.run(main(serial_port))
 
 
