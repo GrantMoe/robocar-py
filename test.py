@@ -199,7 +199,7 @@ async def control_worker():
         # STOP
         steering_pwm = STEERING_NEUTRAL
         throttle_pwm = THROTTLE_NEUTRAL
-    await asyncio.sleep(0.5)
+    # await asyncio.sleep(0.5)
 
 # Test
 async def send_output():
@@ -215,8 +215,7 @@ async def send_output():
   await asyncio.sleep(0.1)
 
     
-async def connection_worker():
-    global STR, THR, TOG, BTNS
+async def run_ble():
 
     device = await BleakScanner.find_device_by_address(addr)
 
@@ -233,25 +232,26 @@ async def connection_worker():
             THR = data_list[1][0]
             TOG = data_list[2][0]
             BTNS = data_list[3][0]
-        for d in data_list:
-            print(d)
-
-    print('Connecting')
     
     async with BleakClient(device, disconnected_callback=handle_disconnect) as client:
-        await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
-        print(f'Connected to {device.name}')
+        while True:
+            await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
+            await asyncio.sleep(0.1)
+
+async def run_control_loop():
+    while True:
+        await control_worker()
+        await asyncio.sleep(0.1)
+
+
+
+async def main():
+
+
+
 
 
 if __name__ == "__main__":
+    loop = asyncio.get_event_loop
 
-    loop = asyncio.get_event_loop()
-    try:
-        asyncio.ensure_future(connection_worker())
-        asyncio.ensure_future(control_worker())
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        print("Closing Loop")
-        loop.close()
+
