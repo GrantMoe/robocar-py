@@ -215,7 +215,7 @@ async def send_output():
   await asyncio.sleep(0.1)
 
     
-async def connection_worker():
+async def test_run():
     global STR, THR, TOG, BTNS
 
     device = await BleakScanner.find_device_by_address(addr)
@@ -242,16 +242,18 @@ async def connection_worker():
         await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
         print(f'Connected to {device.name}')
 
+        loop = asyncio.get_running_loop()
+        try:
+            asyncio.ensure_future(control_worr
+
+        while True:
+            #asyncio.gather(control_worker(), send_output())
+            #await(control_worker)
+
 
 if __name__ == "__main__":
-
-    loop = asyncio.get_event_loop()
     try:
-        asyncio.ensure_future(connection_worker())
-        asyncio.ensure_future(control_worker())
-        loop.run_forever()
-    except KeyboardInterrupt:
+        asyncio.run(test_run())
+    except asyncio.CancelledError:
         pass
-    finally:
-        print("Closing Loop")
-        loop.close()
+    x
