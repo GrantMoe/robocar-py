@@ -215,12 +215,7 @@ async def send_output():
   await asyncio.sleep(0.1)
 
     
-<<<<<<< HEAD
 async def run_ble():
-=======
-async def test_run():
-    global STR, THR, TOG, BTNS
->>>>>>> 0372bbf56d2d6dce3840c6d701e01ec491dd5cce
 
     device = await BleakScanner.find_device_by_address(addr)
 
@@ -248,32 +243,10 @@ async def run_control_loop():
         await control_worker()
         await asyncio.sleep(0.1)
 
-
-
 async def main():
-
-
-
-
-        loop = asyncio.get_running_loop()
-        try:
-            asyncio.ensure_future(control_worr
-
-        while True:
-            #asyncio.gather(control_worker(), send_output())
-            #await(control_worker)
-
-<<<<<<< HEAD
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop
-
-
-=======
+    asyncio.gather(run_ble, run_control_loop)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(test_run())
-    except asyncio.CancelledError:
-        pass
-    x
->>>>>>> 0372bbf56d2d6dce3840c6d701e01ec491dd5cce
+    asyncio.run(main())
+
+
