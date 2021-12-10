@@ -4,10 +4,13 @@ import os
 import builtins
 import logging
 import asyncio
+import serial
+import time
 from enum import Enum
 from asyncio.tasks import ensure_future
 from bleak import BleakClient
 from bleak import BleakScanner
+from serial.serialposix import Serial
 
 # Adafruit nrf58320
 addr = "EF:EB:FD:C7:F8:DA"
@@ -104,14 +107,19 @@ def get_menu(menu_type):
     return bytearray(menu_fields, 'utf-8')
     
 def manual_drive(str, thr):
-    return byte_to_pwm(str), byte_to_pwm(thr)
+    # return byte_to_pwm(str), byte_to_pwm(thr)
+    # simplify it for now
+    return str, thr
 
 def auto_drive(thr, throttle_mode):
     if throttle_mode == Auto_Throttle.AUTO:
         # TODO
-        return STEERING_NEUTRAL, THROTTLE_NEUTRAL
+        # return STEERING_NEUTRAL, THROTTLE_NEUTRAL
+        return 127, 127
     if throttle_mode == Auto_Throttle.MANUAL:
-        return STEERING_NEUTRAL, byte_to_pwm(thr)
+        # return STEERING_NEUTRAL, byte_to_pwm(thr)
+        return 127, thr
+
 
 def erase_records(cutoff):
     # open CSV, open TEMP
@@ -136,7 +144,7 @@ async def send_output():
   await asyncio.sleep(0.1)
 
 
-async def run_control_task(queue: asyncio.Queue):
+async def run_control_task(queue: asyncio.Queue, serial_port: serial.Serial):
     while True:
         data = await queue.get()
         data_list = data.split(b',')
@@ -216,6 +224,9 @@ async def run_control_task(queue: asyncio.Queue):
             if BTNS & 1 << button.value:
                 print(button.name)
         print('===================')
+        serial_port.flush()
+        output_string = f"n,{steering_pwm},{throttle_pwm}"  # it's bytes not pwm
+        serial_port.write(output_string.encode())
         
 
 async def run_ble_client(queue: asyncio.Queue):
@@ -226,14 +237,25 @@ async def run_ble_client(queue: asyncio.Queue):
         await asyncio.sleep(9999999) # shrug
 
 
-async def main():
+async def main(serial_port):
     queue = asyncio.Queue()
     ble_task = run_ble_client(queue)
-    control_task =  run_control_task(queue)
+    control_task =  run_control_task(queue, serial_port)
     await asyncio.gather(ble_task, control_task)
 
 
 if __name__ == "__main__":
+    serial_port = serial.Serial(
+        port="/dev/ttyTHS1",
+        baudrate=115200,
+        bytesize=serial.EIGHTBITS,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE,
+    )
+    time.sleep(1)
+    serial_port.flush()
+    serial_port.write(b"n,127,127")
+    serial_port.write(b's')
     asyncio.run(main())
 
 
