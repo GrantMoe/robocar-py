@@ -35,12 +35,18 @@ class Auto_Throttle(Enum):
     AUTO = 0
     MANUAL = 1
 
-throttle_string = ['Auto', 'Manual']
+class Menu_Mode(Enum):
+    AUTO = 0
+    DATA = 1
+    ERASE = 2
+    MANUAL = 3
+
+TRAIN_MIN = 170
+AUTO_MAX = 85
 
 is_driving = False
 is_recording = False
 is_erasing = False
-
 seconds_to_erase = 0
 
 # Default Adafruit BleUUART for now
@@ -66,15 +72,9 @@ THROTTLE_NEUTRAL = 1500
 steering_pwm = STEERING_NEUTRAL
 throttle_pwm = THROTTLE_NEUTRAL
 
-menu = {
-    'a': '',
-    'b': '',
-    'mode': '',
-    'status': '',
-    'main': '',
-    'background': 'black'
-}
 
+async def update_controller(client):
+    await client.write_gatt_char(UART_RX_CHAR_UUID, data)
 
 def handle_disconnect(self):
     print('Device disconnected')
@@ -97,31 +97,30 @@ def byte_to_pwm(in_byte):
 def is_pressed(btn):
     return BTNS & 1 << btn.value
 
-def auto_menu(drive_mode, is_driving):
-    m = {}
-    m['mode'] = 'autonomous'
-    m['main'] = throttle_string[auto_throttle]
-    m['a'] = 'toggle throttle'
-    if is_driving:
-        m['status'] = 'driving'
-        m['b'] = 'pause'
-    else:
-        m['status'] = 'paused'
-        m['b'] = 'start'
-    return m
 
-def data_menu(recording, records=0):
-    m = {}
-    m['mode'] = 'data'
-    m['main'] = f'Records: {records}'
-    m['a'] = 'erase records'
-    if recording:
-        m['status'] = 'recording'
-        m['b'] = 'pause recording'
+def get_menu(menu_type):
+    global menu
+    data = ['m']
+    m = []
+    if menu_type == Menu_Mode.AUTO: 
+        m.append('a')
+        m.append(is_driving)
+        m.append(auto_throttle)
+    elif menu_type == Menu_Mode.DATA:
+        m.append('d')
+        m.append(is_recording)
+        m.append(records)
+    elif menu_type == Menu_Mode.ERASE:
+        m.append('e')
+        m.append(seconds_to_erase)
     else:
-        m['status'] = 'paused'
-        m['b'] = 'start recording'
-    return m
+        m.append('m')
+    mb = bytearray(m)
+    length = len(mb)
+    data.append(length)
+    data.join(mb)
+    menu = data
+
 
 def manual_drive():
     return byte_to_pwm(STR), byte_to_pwm(THR)
@@ -139,74 +138,79 @@ def erase_records(cutoff):
     # rename TEMP
     pass
 
-
-def erasing_menu(seconds):
-    m = {}
-    m['mode'] = 'data'
-    m['status'] = 'erasing'
-    m['main'] = f'Seconds: {seconds}' 
-    m['b'] = 'confirm'
-    m['a'] = 'cancel'
-    return m
+def record_data():
+    pass
 
 async def process_inputs():
     global menu, control_mode, drive_mode
     global auto_throttle
     global is_erasing, seconds_to_erase
     global is_recording, records
+    global steering_pwm, throttle_pwm
+
+    # drive mode
+    if TOG > TRAIN_MIN:
+        drive_mode = Drive_Mode.DATA
+    elif TOG < AUTO_MAX:
+        drive_mode = Drive_Mode.AUTO
+    else:
+        drive_mode = Drive_Mode.MANUAL
+
     # if the master start/stop switch is on
     if is_pressed(Button.CH_4):
-        # handle things
-        menu['background'] = 'black'
-        # this could be more elegant
         if drive_mode == Drive_Mode.AUTO:
+            menu = get_menu(Menu_Mode.AUTO)
+            # toggle auto throttle
             if is_pressed(Button.TFT_A):
                 if auto_throttle == Auto_Throttle.MANUAL:
                     auto_throttle = Auto_Throttle.AUTO
                 else:
                     auto_throttle = Auto_Throttle.MANUAL
-            menu = auto_menu()
-            steering_pwm, throttle_pwm = auto_drive(auto_throttle)
+            # get output based on throttle
+            if is_driving:
+                steering_pwm, throttle_pwm = auto_drive(auto_throttle)
+            else:
+                steering_pwm, throttle_pwm = manual_drive()
         elif drive_mode == Drive_Mode.DATA:
             if is_erasing:
-                is_recording = False
+                menu = get_menu(Menu_Mode.ERASE)
+                # confirm erasure
+                if is_pressed(Button.TFT_B):
+                    erase_records(seconds_to_erase)
+                    is_erasing = False
+                # cancel erasure
+                elif is_pressed(Button.TFT_A):
+                    seconds_to_erase = 0
+                    is_erasing = False
+                # add seconds
+                elif is_pressed(Button.JOY_UP):
+                    seconds_to_erase += 5
+                # remove seconds
+                elif is_pressed(Button.JOY_DOWN):
+                    seconds_to_erase -= 5
+                    seconds_to_erase = min(seconds_to_erase, 0)
+            else:
+                menu = get_menu(Menu_Mode.DATA)
+                record_data()
+                # toggle recording
                 if is_pressed(Button.TFT_B):
                     if is_recording:
                         is_recording = False
                     else: 
                         is_recording = True
+                # start erasing
                 elif is_pressed(Button.TFT_A):
+                    is_recording = False
                     is_erasing = True
-            else:
-                if is_pressed(Button.TFT_B):
-                    erase_records(seconds_to_erase)
-                    is_erasing = False
-                elif is_pressed(Button.TFT_A):
-                    seconds_to_erase = 0
-                    is_erasing = False
-                elif is_pressed(Button.JOY_DOWN):
-                    seconds_to_erase += 5
-                elif is_pressed(Button.JOY_UP):
-                    seconds_to_erase -= 5
-                    seconds_to_erase = min(seconds_to_erase, 0)
-
-            if is_erasing:
-                menu = erasing_menu(seconds_to_erase)
-
-                menu = data_menu(is_recording, records)
-                
-
-                steering_pwm, throttle_pwm = manual_drive()
-
-        
+            steering_pwm, throttle_pwm = manual_drive()
+        else:
+            menu = get_menu(Menu_Mode.MANUAL)
+            # just manual driving
+            steering_pwm, throttle_pwm = manual_drive()
     else:
         # STOP
         steering_pwm = STEERING_NEUTRAL
         throttle_pwm = THROTTLE_NEUTRAL
-        menu['background'] = 'red'
-
-
-    pass
 
 # Test
 async def send_output():
@@ -235,6 +239,7 @@ async def run():
         
         while True:
             await process_inputs()
+            await update_controller(client)
             await send_output()
 
 loop = asyncio.get_event_loop()
