@@ -199,7 +199,7 @@ async def control_worker():
         # STOP
         steering_pwm = STEERING_NEUTRAL
         throttle_pwm = THROTTLE_NEUTRAL
-    # await asyncio.sleep(0.5)
+    await asyncio.sleep(0.1)
 
 # Test
 async def send_output():
