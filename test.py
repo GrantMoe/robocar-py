@@ -76,7 +76,7 @@ class Transmitter:
         self.started = False
 
     def update(self, data):
-        print('tx.update')
+        #print('tx.update')
         # parse BLE bytearray
         data_list = data.split(b',')
         if len(data_list) >= 3:
@@ -102,6 +102,7 @@ class Transmitter:
         return self.BTNS & 1 << btn.value
 
     def manual_drive(self):
+        print('manual drive')
         return self.STR, self.THR
 
     def auto_drive(self):
@@ -124,8 +125,8 @@ class Transmitter:
 
 async def run_control_task(input_queue: asyncio.Queue, 
     output_queue: asyncio.Queue, serial_port: serial.Serial):
-    global DATA
-    print('starting run control')
+    #global DATA
+    #print('starting run control')
 
     tx = Transmitter()
     rec = Recorder()
@@ -136,12 +137,12 @@ async def run_control_task(input_queue: asyncio.Queue,
     while True:
         data = DATA
         #print('waiting for input data')
-        #data = await input_queue.get()
+        data = await input_queue.get()
         #print('got data')
-        if data == None:
-            print('no data!')
-            await asyncio.sleep(0.5)
-            continue
+        #if data == None:
+        #    print('no data!')
+        #    await asyncio.sleep(0.5)
+        #    continue
 
         tx.update(data)
 
@@ -196,7 +197,7 @@ async def run_control_task(input_queue: asyncio.Queue,
         else:
             tx.menu_mode = Menu_Mode.PAUSED
 
-        print('main section compelete')
+        #print('main section compelete')
 
         # get outputs
         steering_out, throttle_out = tx.drive()
@@ -205,7 +206,7 @@ async def run_control_task(input_queue: asyncio.Queue,
         serial_port.flush()
         output_string = f"n,{steering_out},{throttle_out}" 
         serial_port.write(output_string.encode())
-        print('controls sent to teensy')
+        #print('controls sent to teensy')
 
 
         menu_fields = ''
@@ -225,6 +226,7 @@ async def run_control_task(input_queue: asyncio.Queue,
         # Print controls
         os.system('clear')
         print('===================')
+        print(f'drive mode: {tx.drive_mode}, menu_mode: {tx.menu_mode}')
         print(steering_out, throttle_out, tx.TOG, tx.BTNS)
         for button in Button:
             if tx.is_pressed(button):
@@ -236,10 +238,10 @@ async def run_ble_client(input_queue: asyncio.Queue, output_queue: asyncio.Queue
 
     print('starting BLE client')
     async def callback_handler(sender, data):
-        global DATA
-        DATA = data
-        print(DATA)
-        #await input_queue.put(data)
+        #global DATA
+        #DATA = data
+        #print(DATA)
+        await input_queue.put(data)
         
 
     async with BleakClient(addr) as client:
