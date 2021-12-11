@@ -209,7 +209,7 @@ async def run_control_task(input_queue: asyncio.Queue,
             menu_fields = f'e,{rec.seconds_to_erase}'
         elif tx.menu_mode == Menu_Mode.MANUAL:
             menu_fields = 'm'
-        return bytearray(menu_fields, 'utf-8')
+        # return bytearray(menu_fields, 'utf-8')
         print('menu ready')
         await output_queue.put(tx.get_menu())
         await asyncio.sleep(0.1)
