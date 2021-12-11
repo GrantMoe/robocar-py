@@ -10,6 +10,8 @@ from bleak import BleakClient
 # Adafruit nrf58320
 addr = "EF:EB:FD:C7:F8:DA"
 
+DATA = None
+
 # Default Adafruit BleUUART for now
 UART_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 UART_RX_CHAR_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -122,6 +124,7 @@ class Transmitter:
 
 async def run_control_task(input_queue: asyncio.Queue, 
     output_queue: asyncio.Queue, serial_port: serial.Serial):
+    global DATA
     print('starting run control')
 
     tx = Transmitter()
@@ -131,9 +134,14 @@ async def run_control_task(input_queue: asyncio.Queue,
     throttle_out = THROTTLE_NEUTRAL
 
     while True:
-        print('waiting for input data')
-        data = await input_queue.get()
-        print('got data')
+        data = DATA
+        #print('waiting for input data')
+        #data = await input_queue.get()
+        #print('got data')
+        if data == None:
+            print('no data!')
+            await asyncio.sleep(0.5)
+            continue
 
         tx.update(data)
 
@@ -199,7 +207,7 @@ async def run_control_task(input_queue: asyncio.Queue,
         serial_port.write(output_string.encode())
         print('controls sent to teensy')
 
-    #def get_menu(self):
+
         menu_fields = ''
         if tx.menu_mode == Menu_Mode.AUTO: 
             menu_fields = f'a,{int(tx.auto_driving)},{int(tx.auto_throttle)}'
@@ -209,12 +217,10 @@ async def run_control_task(input_queue: asyncio.Queue,
             menu_fields = f'e,{rec.seconds_to_erase}'
         elif tx.menu_mode == Menu_Mode.MANUAL:
             menu_fields = 'm'
-        # return bytearray(menu_fields, 'utf-8')
-        print('menu ready')
-        await output_queue.put(tx.get_menu())
-        await asyncio.sleep(0.1)
-        print('menu sent to tx')
 
+        msg = bytearray(menu_fields, 'utf-8')
+
+        await output_queue.put(msg)
 
         # Print controls
         os.system('clear')
@@ -227,31 +233,21 @@ async def run_control_task(input_queue: asyncio.Queue,
         
 
 async def run_ble_client(input_queue: asyncio.Queue, output_queue: asyncio.Queue):
+
     print('starting BLE client')
     async def callback_handler(sender, data):
-        print('callback handler')
-        await asyncio.sleep(0.5)
-        await input_queue.put(data)
+        global DATA
+        DATA = data
+        print(DATA)
+        #await input_queue.put(data)
+        
 
     async with BleakClient(addr) as client:
         await client.start_notify(UART_TX_CHAR_UUID, callback_handler)
         print('Connected')
         while True:
-            #print('waiting for output')
-            try:
-                msg = await asyncio.wait_for(output_queue.get(), timeout=0.5)
-                await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
-                #await asyncio.sleep(0.5)
-                print('output sent')
-            except:
-                print('output timeout')
-                pass
-                #print('output queue timed out')
-            #msg = await output_queue.get()
-            #await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
-            await asyncio.sleep(0.5)
-
-
+            msg = await output_queue.get()
+            await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
 
 async def main(serial_port):
     print('running main')
