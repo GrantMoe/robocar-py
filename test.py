@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from asyncio.tasks import gather
 import os
 import asyncio
 import serial
@@ -208,7 +209,6 @@ async def run_control_task(input_queue: asyncio.Queue,
         serial_port.write(output_string.encode())
         #print('controls sent to teensy')
 
-
         menu_fields = ''
         if tx.menu_mode == Menu_Mode.AUTO: 
             menu_fields = f'a,{int(tx.auto_driving)},{int(tx.auto_throttle)}'
@@ -234,22 +234,40 @@ async def run_control_task(input_queue: asyncio.Queue,
         print('===================')
         
 
+async def rx_task(client: BleakClient, input_queue: asyncio.Queue):
+    while True:
+        data = await client.read_gatt_char(UART_RX_CHAR_UUID)
+        await input_queue.put(data)
+        await asyncio.sleep(0.1) # TODO
+
+async def tx_task(client: BleakClient, output_queue: asyncio.Queue):
+    while True:
+        msg = await output_queue.get()
+        await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
+
+
 async def run_ble_client(input_queue: asyncio.Queue, output_queue: asyncio.Queue):
 
-    print('starting BLE client')
-    async def callback_handler(sender, data):
-        #global DATA
-        #DATA = data
-        #print(DATA)
-        await input_queue.put(data)
-        
+    # print('starting BLE client')
+    # async def callback_handler(sender, data):
+    #     #global DATA
+    #     #DATA = data
+    #     #print(DATA)
+    #     await input_queue.put(data)
 
     async with BleakClient(addr) as client:
-        await client.start_notify(UART_TX_CHAR_UUID, callback_handler)
-        print('Connected')
-        while True:
-            msg = await output_queue.get()
-            await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
+        await asyncio.gather(
+            rx_task(client, input_queue), 
+            tx_task(client, output_queue)
+        )
+
+
+        # await client.start_notify(UART_TX_CHAR_UUID, callback_handler)
+        # print('Connected')
+        # while True:
+        #     msg = await output_queue.get()
+        #     await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
+
 
 async def main(serial_port):
     print('running main')
@@ -257,7 +275,6 @@ async def main(serial_port):
     output_queue = asyncio.Queue()
     ble_task = run_ble_client(input_queue, output_queue)
     control_task =  run_control_task(input_queue, output_queue, serial_port)
-
     try:
         await asyncio.gather(ble_task, control_task)
     except KeyboardInterrupt:
