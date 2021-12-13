@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from asyncio import queues
 from asyncio.tasks import gather
 import os
 import asyncio
@@ -10,8 +11,6 @@ from bleak import BleakClient
 
 # Adafruit nrf58320
 addr = "EF:EB:FD:C7:F8:DA"
-
-DATA = None
 
 # Default Adafruit BleUUART for now
 UART_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -124,9 +123,7 @@ class Transmitter:
 #     pwm = ( (in_byte - 0) / (256 - 0) ) * (2000 - 1000) + 1000
 #     return pwm
 
-async def run_control_task(input_queue: asyncio.Queue, 
-    output_queue: asyncio.Queue, serial_port: serial.Serial):
-    #global DATA
+async def run_control_task(input_queue: asyncio.Queue, serial_port: serial.Serial):
     #print('starting run control')
 
     tx = Transmitter()
@@ -136,14 +133,14 @@ async def run_control_task(input_queue: asyncio.Queue,
     throttle_out = THROTTLE_NEUTRAL
 
     while True:
-        data = DATA
-        #print('waiting for input data')
+
+        print('waiting for input data')
         data = await input_queue.get()
         #print('got data')
-        #if data == None:
+        if data == None:
         #    print('no data!')
-        #    await asyncio.sleep(0.5)
-        #    continue
+           await asyncio.sleep(0.5)
+           continue
 
         tx.update(data)
 
@@ -209,19 +206,17 @@ async def run_control_task(input_queue: asyncio.Queue,
         serial_port.write(output_string.encode())
         #print('controls sent to teensy')
 
-        menu_fields = ''
-        if tx.menu_mode == Menu_Mode.AUTO: 
-            menu_fields = f'a,{int(tx.auto_driving)},{int(tx.auto_throttle)}'
-        elif tx.menu_mode == Menu_Mode.DATA:
-            menu_fields = f'd,{int(rec.recording)},{rec.records}'
-        elif tx.menu_mode == Menu_Mode.ERASE:
-            menu_fields = f'e,{rec.seconds_to_erase}'
-        elif tx.menu_mode == Menu_Mode.MANUAL:
-            menu_fields = 'm'
+        # menu_fields = ''
+        # if tx.menu_mode == Menu_Mode.AUTO: 
+        #     menu_fields = f'a,{int(tx.auto_driving)},{int(tx.auto_throttle)}'
+        # elif tx.menu_mode == Menu_Mode.DATA:
+        #     menu_fields = f'd,{int(rec.recording)},{rec.records}'
+        # elif tx.menu_mode == Menu_Mode.ERASE:
+        #     menu_fields = f'e,{rec.seconds_to_erase}'
+        # elif tx.menu_mode == Menu_Mode.MANUAL:
+        #     menu_fields = 'm'
 
-        msg = bytearray(menu_fields, 'utf-8')
-
-        await output_queue.put(msg)
+        # msg = bytearray(menu_fields, 'utf-8')
 
         # Print controls
         os.system('clear')
@@ -234,47 +229,21 @@ async def run_control_task(input_queue: asyncio.Queue,
         print('===================')
         
 
-async def rx_task(client: BleakClient, input_queue: asyncio.Queue):
-    while True:
-        data = await client.read_gatt_char(UART_RX_CHAR_UUID)
+async def run_ble_client(input_queue: asyncio.Queue):
+    async def callback_handler(_, data):
         await input_queue.put(data)
-        await asyncio.sleep(0.1) # TODO
-
-async def tx_task(client: BleakClient, output_queue: asyncio.Queue):
-    while True:
-        msg = await output_queue.get()
-        await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
-
-
-async def run_ble_client(input_queue: asyncio.Queue, output_queue: asyncio.Queue):
-
-    # print('starting BLE client')
-    # async def callback_handler(sender, data):
-    #     #global DATA
-    #     #DATA = data
-    #     #print(DATA)
-    #     await input_queue.put(data)
-
+    
     async with BleakClient(addr) as client:
-        await asyncio.gather(
-            rx_task(client, input_queue), 
-            tx_task(client, output_queue)
-        )
-
-
-        # await client.start_notify(UART_TX_CHAR_UUID, callback_handler)
-        # print('Connected')
-        # while True:
-        #     msg = await output_queue.get()
-        #     await client.write_gatt_char(UART_RX_CHAR_UUID, msg)
+        await client.start_notify(UART_TX_CHAR_UUID, callback_handler)
+        await asyncio.sleep(9999999999)
+        await client.stop_notify(UART_TX_CHAR_UUID)
 
 
 async def main(serial_port):
     print('running main')
     input_queue = asyncio.Queue()
-    output_queue = asyncio.Queue()
-    ble_task = run_ble_client(input_queue, output_queue)
-    control_task =  run_control_task(input_queue, output_queue, serial_port)
+    ble_task = run_ble_client(input_queue)
+    control_task =  run_control_task(input_queue, serial_port)
     try:
         await asyncio.gather(ble_task, control_task)
     except KeyboardInterrupt:
@@ -283,6 +252,7 @@ async def main(serial_port):
     serial_port.flush()
     serial_port.close()
     print('Stopped')
+
 
 if __name__ == "__main__":
     serial_port = serial.Serial(
