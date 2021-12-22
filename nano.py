@@ -1,18 +1,24 @@
 """ Jetson Nano side of garntcar """
+import argparse
 import sys
 import traceback
 import time
 from time import sleep
 from threading import Thread
 import serial
-from xbox import XBoxController
 
-CONTROLLER_PATH = '/dev/input/event2'
+import config
+from xbox import XBoxController
+from tx import BleGampePad
+
 
 class GarntCar:
     """ Handle car input """
-    def __init__(self):
-        self.ctrl = XBoxController(CONTROLLER_PATH)
+    def __init__(self, conf):
+        if conf['controller_type'] == 'xbox':
+            self.ctrl = XBoxController(conf['controller_path'])
+        elif conf['controller_type'] == 'ble_gamepad':
+            self.ctrl = BleGampePad(conf['controller_path'])
         self.ctrl_thread = Thread(target=self.ctrl.run, args=())
         self.ctrl_thread.daemon = True
         self.ctrl_thread.start()
@@ -23,8 +29,11 @@ class GarntCar:
 
     def drive(self):
         """return input values as byte [0-255]"""
-        steer = int(self.ctrl.get_steering(low=0, high=255))
-        throttle = int(self.ctrl.get_throttle(low=0, high=255))
+        steer = 127
+        throttle = 127
+        if self.ready():
+            steer = int(self.ctrl.get_steering(low=0, high=255))
+            throttle = int(self.ctrl.get_throttle(low=0, high=255))
         return (steer, throttle)
 
     def stop(self):
@@ -32,10 +41,10 @@ class GarntCar:
         self.ctrl.stop()
 
 
-def main():
+def main(conf):
     """ Main function """
     serial_port = serial.Serial(
-        port="/dev/ttyTHS1",
+        port=conf['serial_port'],
         baudrate=115200,
         bytesize=serial.EIGHTBITS,
         parity=serial.PARITY_NONE,
@@ -43,7 +52,7 @@ def main():
     )
     time.sleep(1)
     serial_port.flush()
-    car = GarntCar()
+    car = GarntCar(conf)
     serial_port.write(b"n,127,127")
     while not car.ready():
         sleep(0.25)
@@ -70,4 +79,26 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="robocar")
+    parser.add_argument("--controller_type",
+                        type=str,
+                        default="xbox",
+                        help="controller type",
+                        choices=config.default_controller_type)
+    parser.add_argument("--controller_path",
+                        type=str,
+                        default=config.default_controller_path,
+                        help="path to input event controller device")
+    parser.add_argument("--serial_port",
+                        type=str,
+                        default=config.default_serial_port,
+                        help="dev/tty* port for microcontroller",
+                        )
+    # add vehicle type? camera path, whether to record etc. ?
+    args = parser.parse_args()
+    conf = {
+        'controller_type': args.controller_type,
+        'controller_path': args.controller_path,
+        'serial_port': args.serial_port,
+    }
+    main(conf)
