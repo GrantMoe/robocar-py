@@ -7,7 +7,8 @@ dev = evdev.InputDevice('/dev/input/event17')
 
 async def print_events(device):
     async for event in device.async_read_loop():
-        print(device.path, evdev.categorize(event), sep=': ')
+        if event.type == evdev.ecodes.EV_KEY:
+            print(device.path, evdev.categorize(event), sep=': ')
 
 # for device in mouse, keybd:
 asyncio.ensure_future(print_events(dev))
