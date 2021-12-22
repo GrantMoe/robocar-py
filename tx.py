@@ -25,6 +25,8 @@ class BleGamePad:
             # if not self.esc_started:
             #     if event.code == ecodes.BTN_START:
             #         self.esc_started = True
+            if event.type == ecodes.EV_KEY:
+                print(event.code) # testing dpad/hat
             if event.type == ecodes.EV_ABS:
                 if event.code in self.inputs:
                     self.inputs[event.code] = self.process_axis(event.code, event.value)
