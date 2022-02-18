@@ -35,8 +35,9 @@ def main():
     while recording:
         try:
             image = cam.poll_camera()
-            image_path = f'{image_dir}/{time.time()}.png'
-            image.save(image_path)
+            if np.shape(image) != ():
+                image_path = f'{image_dir}/{time.time()}.png'
+                image.save(image_path)
 
         except KeyboardInterrupt:
             recording = False
