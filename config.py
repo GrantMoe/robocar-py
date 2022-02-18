@@ -1,6 +1,9 @@
 
-# TODO: THIS IS FOR THE LAPTOP, NOT NANO
-default_controller_path = '/dev/input/event17'
+# LAPTOP
+# default_controller_path = '/dev/input/event17'
+
+# NANO
+default_controller_path = '/dev/input/event5'
 
 # THIS IS FOR NANO
 default_serial_port = "/dev/ttyTHS1"
