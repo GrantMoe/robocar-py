@@ -14,7 +14,7 @@ from PIL import Image
 
 import config
 from xbox import XBoxController
-from tx import BleGampePad
+from tx import BleGamePad
 from camera import CSICamera
 
 
@@ -24,7 +24,7 @@ class GarntCar:
         if conf['controller_type'] == 'xbox':
             self.ctrl = XBoxController(conf['controller_path'])
         elif conf['controller_type'] == 'ble_gamepad':
-            self.ctrl = BleGampePad(conf['controller_path'])
+            self.ctrl = BleGamePad(conf['controller_path'])
         self.ctrl_thread = Thread(target=self.ctrl.run, args=())
         self.ctrl_thread.daemon = True
         self.ctrl_thread.start()
