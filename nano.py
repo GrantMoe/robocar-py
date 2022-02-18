@@ -58,6 +58,7 @@ class NanoCam:
     def save_frame(self):
         image = self.cam.poll_camera()
         image_path = f'{self.image_dir}/{time.time()}.png'
+        image.save(image_path)
             
 
 def main(conf):
