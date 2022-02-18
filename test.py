@@ -35,7 +35,7 @@ def main():
     recording = True
     while recording:
         try:
-            image = cam.poll_camera()
+            image = cam.frame
             if image:
                 image_path = f'{image_dir}/{time.time()}.png'
                 image.save(image_path)

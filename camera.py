@@ -49,15 +49,12 @@ class CSICamera():
         time.sleep(2)
         
     def run(self):
-        self.init_camera()
         while self.running:
             self.poll_camera()
 
     def poll_camera(self):
         self.ret , frame = self.camera.read()
-        if self.ret:
-            self.frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return self.frame
+        self.frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     # def run(self):
     #     self.poll_camera()
