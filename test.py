@@ -22,7 +22,7 @@ def main():
 
 
     cam = CSICamera(image_w=1280, image_h=720, image_d=3, capture_width=1280, capture_height=720, framerate=60, gstreamer_flip=0)
-    cam_thread = Thread(target=self.cam.run, args=())
+    cam_thread = Thread(target=cam.run, args=())
     cam_thread.daemon = True
     cam_thread.start()
 
