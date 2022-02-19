@@ -36,10 +36,12 @@ def main():
     while recording:
         try:
             image = cam.poll_camera()
+            print('polled camera')
             if image:
+                print('image if')
                 image_path = f'{image_dir}/{time.time()}.png'
                 cv2.imwrite(image_path, image)
-                image.save(image_path)
+                # image.save(image_path)
         except KeyboardInterrupt:
             recording = False
         except Exception as exception_error:
