@@ -38,6 +38,7 @@ def main():
             image = cam.poll_camera()
             if image:
                 image_path = f'{image_dir}/{time.time()}.png'
+                cv2.imwrite(image_path, image)
                 image.save(image_path)
         except KeyboardInterrupt:
             recording = False
