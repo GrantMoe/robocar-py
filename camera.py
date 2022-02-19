@@ -54,6 +54,7 @@ class CSICamera():
 
     def poll_camera(self):
         self.ret , frame = self.camera.read()
+        print(self.ret)
         if self.ret:
             self.frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         return self.frame
