@@ -36,7 +36,7 @@ def main():
     while recording:
         try:
             image = cam.poll_camera()
-            print('polled camera')
+            # print('polled camera')
             if image:
                 print('image if')
                 image_path = f'{image_dir}/{time.time()}.png'
