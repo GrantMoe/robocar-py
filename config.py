@@ -12,7 +12,7 @@ controller_types = [
     'xbox',
     'ble_gamepad'
 ]
-default_controller_type = 'ble_gamepad'
+default_controller_type = 'xbox'
 
 
 # Menus

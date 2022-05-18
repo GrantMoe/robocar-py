@@ -95,7 +95,7 @@ def main(conf):
             camera.save_frame()
             serial_port.flush()
             steer_byte, throttle_byte = car.drive()
-            output_string = f"n,{steer_byte},{throttle_byte}"
+            output_string = f"o,{steer_byte},{throttle_byte}"
             print(output_string)
             serial_port.write(output_string.encode())
             sleep(0.1)
