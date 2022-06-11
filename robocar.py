@@ -1,91 +1,53 @@
 import os
 import serial
+import sys
 import time
-import io
+import traceback
+
+from serial.threaded import LineReader, ReaderThread
+from threading import Thread
+
+# pyserial.readthedocs.io/en/latest/pyserial_api.html#serial.threaded.ReaderThread
+class MicroControllerSerial(LineReader):
+    def connection_made(self, transport):
+        super(MicroControllerSerial, self).connection_made(transport)
+        sys.stdout.write('port opened\n')
+        self.write_line('hello world')
+
+    def handle_line(self, data):
+        decoded_data = data.strip()
+        channels = list(map(int, decoded_data.split(',')))
+        for i, channel in enumerate(channels):
+            print(f"{i+1}: {channel}", end = " ")
+        print()
+        self.write_line('foo!')
+
+    def connection_lost(self, exc):
+        if exc:
+            traceback.print_exc(exc)
+        sys.stdout.write('port closed\n')
 
 
 def main():
 
-    steering_in = None
-    throttle_in = None
-    switch_in = None
-    input_needed = True
-    input_requested = False
-
     # set up paths for data recording
-    data_dir = f'{os.getcwd()}/data/{time.strftime("%m_%d_%Y/%H_%M_%S")}'
-    os.makedirs(data_dir, exist_ok=True)
-
-    # pyserial.readthedocs.io/en/latest/shortintro.html
-    #ser = serial.Serial('/dev/ttyTHS1', timeout=1)
+#    data_dir = f'{os.getcwd()}/data/{time.strftime("%m_%d_%Y/%H_%M_%S")}'
+#    os.makedirs(data_dir, exist_ok=True)
 
     # start serial with Teensy
-    serial_port = serial.Serial(
-        port='/dev/ttyTHS1',
+    ser = serial.Serial(
+        # port='/dev/ttyACM0', # Desk/Laptop
+        port='/dev/ttyTHS1', # Jetson Nano
         baudrate=115200,
         bytesize=serial.EIGHTBITS,
         parity=serial.PARITY_NONE,
         stopbits=serial.STOPBITS_ONE,
     )
-    time.sleep(1)
-    serial_port.flush()
 
-    print('setup complete')
-
-    serial_port.write(b's')
-
-    while True:
-        print(f'{input_requested = }, {input_needed = }')
-
-        if input_needed and not input_requested:
-            serial_port.write(b'g')
-            input_requested = True
-
-        if serial_port.in_waiting > 0:
-            bytes_in = serial_port.readline()
-            print(f'{bytes_in = }')            
-            line = str(bytes_in)
-            print(f'serial line: {line}')
-            inputs = line[1:].split(',')
-            print(f'{inputs = }')
-
-            if line[0] == 'i':
-                #inputs = line[1:].split(',')
-                steering_in = inputs[0]
-                throttle_in = inputs[1]
-                switch_in = inputs[2]
-                input_needed = True
-                input_requested = False
-
-        time.sleep(1)
-
-
-    # # start serial with Teensy
-    # serial_port = serial.Serial(
-    #     port=conf['serial_port'],
-    #     baudrate=115200,
-    #     bytesize=serial.EIGHTBITS,
-    #     parity=serial.PARITY_NONE,
-    #     stopbits=serial.STOPBITS_ONE,
-    # )
-    # time.sleep(1)
-    # serial_port.flush()
-
-    # initialize gpsd input
-
-    # set up NTRIP stream?
-
-    
-    # get input from Teensy via serial
-    # output_string = f"i"
-    # print(output_string)
-    # serial_port.write(output_string.encode())
-    
-
-    # process drive mode
-    # process drive status
-    # get GPS data
-    # afs
+    new_thread = ReaderThread(ser, MicroControllerSerial)
+    new_thread.start()
+    time.sleep(2)
+    new_thread.stop()
 
 if __name__ == "__main__":
     main()

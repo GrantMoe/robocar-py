@@ -1,23 +1,39 @@
 # RoboCar-Py
-A variation on a common theme. Python scripts to run on a Jetson Nano mounted on my 1/10 scale DIY Robocar.
+Python scripts to run on a Jetson Nano mounted on my 1/10 scale DIY Robocar(s).
 
 ## Hardware
-### Car
-* Jetson Nano
-* Teesny 4.0
 
-The Teensy is serving as a glorified PWM driver. It receives steering and throttle inputs from the Nano via a serial connection (UART), then sends the correct pulse width signals to the steering servo and throttle. 
+### 1/10 Scale On-Road
 
-It will be given more to do in the future, probably.
+#### Chasses
+1. [Tamiya TB05 Pro](https://www.tamiyausa.com/shop/110-4wd-shaft-drive-road-tb/rc-tb-05-pro-chassis-kit/)
+1. TB05 with [Exotek EXO-SIX.2 Chassis Conversion Set](https://www.exotekracing.com/exo-six-2-chassis-conversion-set-for-tb05/)
 
-### Transmitter
+#### Motors 
+1. [XeRun V10 G3R - 21.5T](https://www.hobbywing.com/goods.php?id=658&filter_attr=5435.0.0.0.0.0.0.0.0.0)
+2. [XeRun V10 G3R - 13.5T](https://www.hobbywing.com/goods.php?id=658&filter_attr=5435.0.0.0.0.0.0.0.0.0)
+<!-- 1. [Reedy S-Plus 17.5T, torque](https://www.associatedelectrics.com/reedy/parts/details/27429-ASC27429-reedy_s-plus_17_5t_torque/) -->
 
-[robocar-tx](https://github.com/GrantMoe/robocar-tx): BLE Feather [Adafruit Feather nRF52 Bluefruit LE](https://www.adafruit.com/product/3406) grafted to the remains of an RC transmitter housing.
+#### Speed Control
+- [Hobbywing XeRun XR10 Justock (G2)](https://www.hobbywing.com/goods.php?id=336) x2
+ 
+#### Servos
+- [Power HD B7 Revolution Pro](http://www.chd.hk/Product_Detail.aspx?id=189) x2
+
+#### Transmitter
+- [Fly Sky FS-GT5](https://www.flysky-cn.com/gt5-gaishu)
+
+#### Receivers
+1. [Fly Sky FS-X6B](https://www.flysky-cn.com/x6b-canshu)
+2. [Fly Sky FS-iA8X](https://www.flysky-cn.com/ia8x-canshu)
+
+#### CPU/GPU
+- [NVIDIA Jetson Nano](https://developer.nvidia.com/embedded/jetson-nano-developer-kit)
+
+#### Microcontroller
+1. [PJRC Teensy 3.2](https://www.pjrc.com/teensy/teensy31.html) with [breakout board](https://www.tindie.com/products/loglow/teensy-32-breakout-revision-d/)
+
 
 ## Software
 
-User input is provided by a Bluetooth XBox controller paired to the Jetson Nano. I don't like driving with the thumbsticks, and XBox controllers can be a bit iffy with Jetson Nanos for whatever reason, so I am in the process of switching to a more direct GATT-based approach. An Arduino sketch running on the Feather in the transmitter unit polls various knobs and switches and potentiometers then sends the info over to the Nano.
-
-Everything is hard/hand coded for now.
-
-In theory PWM output could be handled by the Nano itself. I might explore that later.
+Currently just a serial test.
